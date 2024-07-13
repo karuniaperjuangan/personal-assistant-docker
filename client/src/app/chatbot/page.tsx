@@ -6,7 +6,8 @@ interface Chat{
   role: string;
 }
 
-const base_url = 'http://localhost:8080/chat/completions'
+console.log(process.env.NEXT_PUBLIC_BASE_URL)
+const base_url = `${process.env.NEXT_PUBLIC_BASE_URL}/chat/completions`
 
 const Chatbot: NextPage = () => {
   const [messages, setMessages] = useState<Chat[]>([]);

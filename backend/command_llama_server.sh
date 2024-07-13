@@ -1,1 +1,1 @@
-docker run -p 8080:8080 -v ./model:/models --gpus all ghcr.io/ggerganov/llama.cpp:server-cuda -m models/SeaLLM-7B-v2-Q5_K_M.gguf -c 512 --host 0.0.0.0 --port 8080 --n-gpu-layers 99
+docker run -p 8080:8080 --hostname 0.0.0.0 -v ./model:/models --gpus all ghcr.io/ggerganov/llama.cpp:server-cuda -m models/SeaLLM-7B-v2-Q5_K_M.gguf -c 2048 --host 0.0.0.0 --port 8080 --n-gpu-layers 99

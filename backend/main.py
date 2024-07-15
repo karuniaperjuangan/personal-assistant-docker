@@ -6,6 +6,13 @@ import os
 from pydantic import BaseModel
 from langchain_community.document_loaders.pdf import PyPDFLoader
 from contextlib import asynccontextmanager
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+import torch
+
+embeddings_model = HuggingFaceEmbeddings(model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+
+
 class Prompt(BaseModel):
     prompt: str
 
@@ -46,17 +53,16 @@ async def lifespan(app:FastAPI):
 @app.post("/upload")
 #must be pdf
 async def upload(file: UploadFile = File(...)):
+    split = RecursiveCharacterTextSplitter()
     with open("file.pdf", "wb") as f:
         f.write(file.file.read())
     #pdf = PdfReader("file.pdf")
     #text = str(len(pdf.pages)) + " pages\n"
     #for page in pdf.pages:
     #    text += page.extract_text()
-    doc = PyPDFLoader("file.pdf").load_and_split()
-    text = ""
-    for page in doc:
-        text += page.page_content
-    return text
+    doc = PyPDFLoader("file.pdf").load_and_split(text_splitter=split)
+    embeddings = torch.nn.functional.normalize(torch.tensor(embeddings_model.embed_documents([item.page_content for item in doc])))
+    return (embeddings @ embeddings.T).tolist()
 
 
 # 404 page if the user tries to access a page that doesn't exist

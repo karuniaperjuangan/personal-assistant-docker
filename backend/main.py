@@ -51,21 +51,25 @@ async def lifespan(app:FastAPI):
     os.remove("file.pdf")
 
 
-@app.post("/upload")
-#must be pdf
-async def upload(prompt="Siapa nama penulis ini?",file: UploadFile = File(...)):
+@app.post("/upload_pdf")
+async def upload_pdf(file: UploadFile = File(...)):
     split = RecursiveCharacterTextSplitter()
     with open("file.pdf", "wb") as f:
         f.write(file.file.read())
-    #pdf = PdfReader("file.pdf")
-    #text = str(len(pdf.pages)) + " pages\n"
-    #for page in pdf.pages:
-    #    text += page.extract_text()
     doc = PyPDFLoader("file.pdf").load_and_split(text_splitter=split)
-    db = Chroma.from_documents(doc, embeddings_model)
-    query = prompt
+    db = Chroma.from_documents(doc, embeddings_model,persist_directory="embeddings")
+    
+    return {"message": "PDF uploaded and processed successfully."}
+
+@app.post("/similarity_search")
+async def similarity_search(prompt: Prompt):
+    query = prompt.prompt
+    
+    
+    db = Chroma(persist_directory="embeddings", embedding_function=embeddings_model)
     results = db.similarity_search(query, k=5)
     results = [item.page_content for item in results]
+    
     return results
 
 

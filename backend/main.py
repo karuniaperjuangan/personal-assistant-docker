@@ -8,6 +8,7 @@ from langchain_community.document_loaders.pdf import PyPDFLoader
 from contextlib import asynccontextmanager
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_chroma import Chroma
 import torch
 
 embeddings_model = HuggingFaceEmbeddings(model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
@@ -52,7 +53,7 @@ async def lifespan(app:FastAPI):
 
 @app.post("/upload")
 #must be pdf
-async def upload(file: UploadFile = File(...)):
+async def upload(prompt="Siapa nama penulis ini?",file: UploadFile = File(...)):
     split = RecursiveCharacterTextSplitter()
     with open("file.pdf", "wb") as f:
         f.write(file.file.read())
@@ -61,8 +62,11 @@ async def upload(file: UploadFile = File(...)):
     #for page in pdf.pages:
     #    text += page.extract_text()
     doc = PyPDFLoader("file.pdf").load_and_split(text_splitter=split)
-    embeddings = torch.nn.functional.normalize(torch.tensor(embeddings_model.embed_documents([item.page_content for item in doc])))
-    return (embeddings @ embeddings.T).tolist()
+    db = Chroma.from_documents(doc, embeddings_model)
+    query = prompt
+    results = db.similarity_search(query, k=5)
+    results = [item.page_content for item in results]
+    return results
 
 
 # 404 page if the user tries to access a page that doesn't exist

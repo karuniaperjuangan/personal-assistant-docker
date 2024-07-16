@@ -7,18 +7,25 @@ from pydantic import BaseModel
 from langchain_community.document_loaders.pdf import PyPDFLoader
 from contextlib import asynccontextmanager
 from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_openai import ChatOpenAI
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_chroma import Chroma
 import torch
+from langchain import hub
+from dotenv import load_dotenv
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables import RunnablePassthrough
 
+dotenv.load_dotenv()
 embeddings_model = HuggingFaceEmbeddings(model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
 
+chat_model = ChatOpenAI(base_url=os.getenv("BASE_URL"), api_key="sk-1234")
 
 class Prompt(BaseModel):
     prompt: str
 
 app = FastAPI()
-dotenv.load_dotenv()
+
 
 print(os.environ.get("BASE_URL"))
 @app.get("/")
@@ -53,12 +60,12 @@ async def lifespan(app:FastAPI):
 
 @app.post("/upload_pdf")
 async def upload_pdf(file: UploadFile = File(...)):
-    split = RecursiveCharacterTextSplitter()
+    split = RecursiveCharacterTextSplitter.from_huggingface_tokenizer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",chunk_size=200)
     with open("file.pdf", "wb") as f:
         f.write(file.file.read())
     doc = PyPDFLoader("file.pdf").load_and_split(text_splitter=split)
     db = Chroma.from_documents(doc, embeddings_model,persist_directory="embeddings")
-    
+    os.remove("file.pdf")
     return {"message": "PDF uploaded and processed successfully."}
 
 @app.post("/similarity_search")
@@ -67,10 +74,24 @@ async def similarity_search(prompt: Prompt):
     
     
     db = Chroma(persist_directory="embeddings", embedding_function=embeddings_model)
-    results = db.similarity_search(query, k=5)
-    results = [item.page_content for item in results]
+    #results = db.similarity_search(query, k=5)
+    #results = [item.page_content for item in results]
+    retriever = db.as_retriever()
+    prompt = hub.pull("rlm/rag-prompt")
+
+    def format_docs(docs):
+        return "\n\n".join(doc.page_content for doc in docs)
     
-    return results
+    rag_chain = (
+    {"context": retriever | format_docs, "question": RunnablePassthrough()}
+    | prompt
+    | chat_model
+    | StrOutputParser()
+    )
+
+    result = rag_chain.invoke(query)
+
+    return result
 
 
 # 404 page if the user tries to access a page that doesn't exist

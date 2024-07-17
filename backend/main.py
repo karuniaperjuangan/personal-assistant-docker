@@ -15,12 +15,12 @@ from langchain import hub
 from dotenv import load_dotenv
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
-
+from transformers import AutoTokenizer
 dotenv.load_dotenv()
 embeddings_model = HuggingFaceEmbeddings(model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
 
 chat_model = ChatOpenAI(base_url=os.getenv("BASE_URL"), api_key="sk-1234")
-
+tokenizer = AutoTokenizer.from_pretrained("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
 class Prompt(BaseModel):
     prompt: str
 
@@ -60,7 +60,7 @@ async def lifespan(app:FastAPI):
 
 @app.post("/upload_pdf")
 async def upload_pdf(file: UploadFile = File(...)):
-    split = RecursiveCharacterTextSplitter.from_huggingface_tokenizer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",chunk_size=200)
+    split = RecursiveCharacterTextSplitter.from_huggingface_tokenizer(tokenizer,chunk_size=600)
     with open("file.pdf", "wb") as f:
         f.write(file.file.read())
     doc = PyPDFLoader("file.pdf").load_and_split(text_splitter=split)
@@ -76,7 +76,7 @@ async def similarity_search(prompt: Prompt):
     db = Chroma(persist_directory="embeddings", embedding_function=embeddings_model)
     #results = db.similarity_search(query, k=5)
     #results = [item.page_content for item in results]
-    retriever = db.as_retriever()
+    retriever = db.as_retriever(k=2)
     prompt = hub.pull("rlm/rag-prompt")
 
     def format_docs(docs):
